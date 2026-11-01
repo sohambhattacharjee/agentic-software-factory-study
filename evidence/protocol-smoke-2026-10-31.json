@@ -1,0 +1,19 @@
+{
+  "captured_local_date": "2026-10-31",
+  "captured_utc": "2026-11-01T00:46:40Z",
+  "run_id": "20261101T004640591604Z",
+  "classification": "protocol smoke check; not a scored model experiment",
+  "factory_revision": "32c516e7122d438d05fb0d82d96177243901f8ae",
+  "target_revision": "1f80afd25b7e9c6bf6478dc48ba17aceae90d372",
+  "profile": "verification",
+  "provider": "scripted-test-fixture",
+  "task": "tasks/add-cancellation.md",
+  "context_manifest_sha256": "0504598016da02df304bfe5c4568afcd31e6b3d856f0ffd4f4a823420061aff5",
+  "prompt_sha256": "a27853e42d9b65f026cf3ba8902cc85eda8ab83bccaaf5c689fb9a3ca692f44d",
+  "proposed_file_count": 0,
+  "target_test_command": "python3 -m unittest discover -s tests -v",
+  "target_test_exit_code": 0,
+  "target_modified": false,
+  "elapsed_seconds": 0.1514,
+  "interpretation": "Confirms marker enforcement, context capture, scratch execution, fixed-test invocation, and metadata capture. The scripted fixture contains no implementation and provides no evidence of model coding performance."
+}

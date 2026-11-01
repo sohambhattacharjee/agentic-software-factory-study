@@ -31,6 +31,8 @@ The initial version supports staged profiles (`baseline`, `context`, `memory`, `
 
 Each run records its profile, prompt hash, context manifest, model identifier when used, timings, test status, review result, and intervention fields. The factory itself will be improved in small, versioned steps; this initial state is the factory baseline.
 
+The first local runner smoke check is summarized in [`evidence/protocol-smoke-2026-10-31.json`](evidence/protocol-smoke-2026-10-31.json). It used a scripted empty proposal and is not a scored model result.
+
 ## Safety and limits
 
 - Runs modify a disposable copy, never the target.
