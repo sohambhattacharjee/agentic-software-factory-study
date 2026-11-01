@@ -39,4 +39,3 @@ Each run records its profile, prompt hash, context manifest, model identifier wh
 - Generated edits are restricted to regular text files inside the scratch copy.
 - OpenAI-backed requests transmit the selected task and context to the OpenAI API only after explicit CLI acknowledgement.
 - This prototype is an experimental tool, not a production deployment or a legal determination of IP ownership.
-

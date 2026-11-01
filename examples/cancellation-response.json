@@ -1,0 +1,5 @@
+{
+  "summary": "Offline fixture: sample a conservative cancellation implementation for protocol checks.",
+  "edits": [],
+  "risks": ["This empty proposal is a runner fixture, not an implementation result."]
+}

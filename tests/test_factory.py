@@ -1,0 +1,72 @@
+import json
+import os
+import tempfile
+import unittest
+
+from study_factory.provider import ScriptedProvider
+from study_factory.runner import run_task
+from study_factory.safety import SafetyError, require_study_repo, safe_relative_path
+from study_factory.context import inventory
+
+
+class FactoryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.repo = os.path.join(self.temp.name, "repo")
+        self.output = os.path.join(self.temp.name, "runs")
+        os.makedirs(os.path.join(self.repo, "tests"))
+        with open(os.path.join(self.repo, ".research-scope.json"), "w", encoding="utf-8") as f:
+            json.dump({"study_id": "synthetic-brownfield-agentic", "data_classification": "synthetic-only"}, f)
+        with open(os.path.join(self.repo, "README.md"), "w", encoding="utf-8") as f:
+            f.write("Synthetic test target\n")
+        with open(os.path.join(self.repo, "tests", "test_ok.py"), "w", encoding="utf-8") as f:
+            f.write("import unittest\nclass T(unittest.TestCase):\n def test_ok(self): self.assertTrue(True)\n")
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_unmarked_target_is_rejected(self):
+        os.remove(os.path.join(self.repo, ".research-scope.json"))
+        with self.assertRaises(SafetyError):
+            require_study_repo(self.repo)
+
+    def test_relative_path_rejects_traversal(self):
+        with self.assertRaises(SafetyError):
+            safe_relative_path("../outside.txt")
+
+    def test_inventory_excludes_database_files(self):
+        with open(os.path.join(self.repo, "study.sqlite3"), "wb") as f:
+            f.write(b"not source context")
+        paths = [entry["path"] for entry in inventory(self.repo)]
+        self.assertNotIn("study.sqlite3", paths)
+
+    def test_run_edits_disposable_copy_and_leaves_target_unchanged(self):
+        provider = ScriptedProvider({"summary": "fixture", "edits": [{"path": "README.md", "content": "changed\n"}], "risks": []})
+        run_dir, metadata = run_task(self.repo, "Change the README.", "baseline", provider, self.output)
+        with open(os.path.join(self.repo, "README.md"), encoding="utf-8") as f:
+            self.assertEqual(f.read(), "Synthetic test target\n")
+        with open(os.path.join(run_dir, "scratch", "README.md"), encoding="utf-8") as f:
+            self.assertEqual(f.read(), "changed\n")
+        self.assertFalse(metadata["target_modified"])
+        self.assertTrue(os.path.isfile(os.path.join(run_dir, "patch.diff")))
+
+    def test_verification_profile_requires_explicit_permission(self):
+        provider = ScriptedProvider({"summary": "no change", "edits": [], "risks": []})
+        with self.assertRaises(SafetyError):
+            run_task(self.repo, "No change.", "verification", provider, self.output)
+
+    def test_verification_runs_fixed_tests_in_scratch(self):
+        provider = ScriptedProvider({"summary": "no change", "edits": [], "risks": []})
+        run_dir, metadata = run_task(self.repo, "No change.", "verification", provider, self.output,
+                                     allow_test_execution=True)
+        self.assertEqual(metadata["test_exit_code"], 0)
+        self.assertTrue(os.path.isfile(os.path.join(run_dir, "verification.json")))
+
+    def test_memory_profile_includes_author_memory(self):
+        provider = ScriptedProvider({"summary": "no change", "edits": [], "risks": []})
+        run_task(self.repo, "No change.", "memory", provider, self.output, memory_text="STUDY MEMORY NOTE")
+        self.assertIn("STUDY MEMORY NOTE", provider.prompts[0])
+
+
+if __name__ == "__main__":
+    unittest.main()
