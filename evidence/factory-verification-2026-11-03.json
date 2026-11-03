@@ -1,0 +1,17 @@
+{
+  "captured_local_date": "2026-11-03",
+  "purpose": "Fresh verification of the independent factory baseline",
+  "factory_revision": "6845c49b8780ee6075ef617e90b3874297769330",
+  "environment": {
+    "python": "3.9.6",
+    "platform": "Darwin 25.6.0 arm64",
+    "dependencies": "Python standard library only"
+  },
+  "suite": {
+    "command": "python3 -m unittest discover -s tests -v",
+    "result": "7 tests passed in 0.064 seconds",
+    "status": "pass"
+  },
+  "external_model_calls": 0,
+  "interpretation": "Confirms the factory's own tests pass at the recorded revision. It is not a scored agent run."
+}
