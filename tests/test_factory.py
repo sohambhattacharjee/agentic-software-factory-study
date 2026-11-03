@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 
@@ -30,6 +31,17 @@ class FactoryTests(unittest.TestCase):
         with self.assertRaises(SafetyError):
             require_study_repo(self.repo)
 
+    def test_run_rejects_dirty_git_target(self):
+        subprocess.run(["git", "init", "-q", self.repo], check=True)
+        subprocess.run(["git", "-C", self.repo, "add", "-A"], check=True)
+        subprocess.run(["git", "-C", self.repo, "-c", "user.name=Study", "-c",
+                        "user.email=study@example.invalid", "commit", "-qm", "initial"], check=True)
+        with open(os.path.join(self.repo, "README.md"), "a", encoding="utf-8") as f:
+            f.write("uncommitted change\n")
+        provider = ScriptedProvider({"summary": "no change", "edits": [], "risks": []})
+        with self.assertRaises(SafetyError):
+            run_task(self.repo, "No change.", "baseline", provider, self.output)
+
     def test_relative_path_rejects_traversal(self):
         with self.assertRaises(SafetyError):
             safe_relative_path("../outside.txt")
@@ -48,6 +60,11 @@ class FactoryTests(unittest.TestCase):
         with open(os.path.join(run_dir, "scratch", "README.md"), encoding="utf-8") as f:
             self.assertEqual(f.read(), "changed\n")
         self.assertFalse(metadata["target_modified"])
+        self.assertIsNone(metadata["target_revision"])
+        self.assertIsNotNone(metadata["factory_revision"])
+        self.assertIn("factory_working_tree_clean", metadata)
+        self.assertIn("task_sha256", metadata)
+        self.assertIsNone(metadata["provider_usage"])
         self.assertTrue(os.path.isfile(os.path.join(run_dir, "patch.diff")))
 
     def test_verification_profile_requires_explicit_permission(self):

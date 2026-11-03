@@ -46,7 +46,8 @@ class OpenAIResponsesProvider:
                     chunks.append(content.get("text", ""))
         if not chunks:
             raise ProviderError("OpenAI API response did not include output text.")
-        return {"text": "\n".join(chunks), "response_id": payload.get("id"), "model": payload.get("model", self.model)}
+        return {"text": "\n".join(chunks), "response_id": payload.get("id"),
+                "model": payload.get("model", self.model), "usage": payload.get("usage")}
 
 
 class ScriptedProvider:

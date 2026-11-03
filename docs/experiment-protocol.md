@@ -50,7 +50,7 @@ Report counts and per-run observations. With one synthetic application and one t
 2. Freeze the exact task text, acceptance rubric, fixed test command, model name, API settings, date range, and retry policy.
 3. Run five exploratory repetitions per profile, with all five profiles represented in each block and profile order randomized within each block. Every run begins from the same pre-task revision. Label provider failures and invalid outputs as attempts; do not silently replace them.
 4. Keep scripted fixture runs separate from scored model runs. Scripted runs validate the runner and evidence format only.
-5. Before scored runs, extend evidence capture to include provider usage/token counts when returned by the API. Until then, token usage and cost are unavailable and must not be inferred from elapsed time.
+5. The runner records target and factory revisions, both checkout cleanliness states, task hash, runtime, and provider usage when returned by the API. Run the scored set from a clean, committed factory revision. Token usage or cost must not be inferred when the provider omits usage or when no dated price source is recorded.
 
 The proposed five repetitions per profile are a pilot choice, not a claim of statistical power. Revisit the run count after a cost check and before starting the scored set.
 

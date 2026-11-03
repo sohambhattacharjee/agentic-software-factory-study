@@ -2,6 +2,7 @@ import difflib
 import hashlib
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -93,11 +94,31 @@ def _write_json(path, value):
         output.write("\n")
 
 
+def _git_snapshot(root):
+    """Return the repository revision and cleanliness, or nulls for non-Git test fixtures."""
+    revision = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"],
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                              universal_newlines=True, check=False)
+    if revision.returncode != 0:
+        return None, None
+    status = subprocess.run(["git", "-C", root, "status", "--porcelain", "--untracked-files=all"],
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                            universal_newlines=True, check=False)
+    if status.returncode != 0:
+        return revision.stdout.strip(), None
+    return revision.stdout.strip(), not bool(status.stdout.strip())
+
+
 def run_task(repo_path, task_text, profile_name, provider, output_root, confirm_external=False,
              allow_test_execution=False, memory_text="", timeout=30):
     if profile_name not in PROFILES:
         raise ValueError("Unknown profile: " + profile_name)
     root = require_study_repo(repo_path)
+    target_revision, target_clean = _git_snapshot(root)
+    if target_revision is not None and target_clean is not True:
+        raise SafetyError("The target Git checkout must be clean before a reproducible run.")
+    factory_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    factory_revision, factory_clean = _git_snapshot(factory_root)
     if getattr(provider, "model", "") != "scripted-test-fixture" and not confirm_external:
         raise SafetyError("External model use requires --confirm-external-model.")
     if not isinstance(task_text, str) or not task_text.strip():
@@ -148,12 +169,19 @@ def run_task(repo_path, task_text, profile_name, provider, output_root, confirm_
         "capabilities": profile,
         "task": task_text.strip(),
         "target_marker": ".research-scope.json",
+        "target_revision": target_revision,
+        "target_working_tree_clean": target_clean,
+        "factory_revision": factory_revision,
+        "factory_working_tree_clean": factory_clean,
+        "task_sha256": hashlib.sha256(task_text.strip().encode("utf-8")).hexdigest(),
+        "runtime": {"python": platform.python_version(), "platform": platform.platform()},
         "context_files": selected,
         "context_manifest_sha256": manifest_digest,
         "inventory_file_count": len(entries),
         "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
         "model": response.get("model"),
         "response_id": response.get("response_id"),
+        "provider_usage": response.get("usage"),
         "proposed_file_count": len(proposed["edits"]),
         "test_exit_code": None if test_result is None else test_result["exit_code"],
         "review_pass_performed": review_result is not None,
