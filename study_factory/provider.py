@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -42,7 +43,9 @@ class OpenAIResponsesProvider:
                         details.append(value)
                 message = error_payload.get("message")
                 if isinstance(message, str):
-                    details.append(message.replace(self.api_key, "[redacted]"))
+                    message = message.replace(self.api_key, "[redacted]")
+                    message = re.sub(r"\b(?:sk|rk|sess)-[A-Za-z0-9_*.-]+", "[redacted key]", message)
+                    details.append(message)
             except (UnicodeError, json.JSONDecodeError, AttributeError, TypeError):
                 pass
             summary = "OpenAI API returned HTTP " + str(exc.code)

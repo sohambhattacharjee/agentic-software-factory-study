@@ -63,6 +63,19 @@ class FactoryTests(unittest.TestCase):
         self.assertIn("req_fixture", message)
         self.assertNotIn("fixture-secret", message)
 
+    def test_provider_redacts_masked_api_key_in_error_message(self):
+        body = json.dumps({"error": {"code": "invalid_api_key",
+                                      "message": "Incorrect API key provided: sk-proj-********AIAa."}}).encode("utf-8")
+        error = HTTPError("https://api.openai.com/v1/responses", 401, "Unauthorized", {}, BytesIO(body))
+        provider = OpenAIResponsesProvider(model="gpt-6.1-sol", api_key="another-fixture-secret")
+        with patch("study_factory.provider.urlopen", side_effect=error):
+            with self.assertRaises(ProviderError) as caught:
+                provider.generate("synthetic prompt")
+        message = str(caught.exception)
+        self.assertIn("invalid_api_key", message)
+        self.assertNotIn("sk-proj-", message)
+        self.assertNotIn("AIAa", message)
+
     def test_inventory_excludes_database_files(self):
         with open(os.path.join(self.repo, "study.sqlite3"), "wb") as f:
             f.write(b"not source context")
