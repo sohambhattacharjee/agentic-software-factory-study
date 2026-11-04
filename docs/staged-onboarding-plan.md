@@ -20,6 +20,7 @@ This plan treats onboarding as a sequence of gated capabilities around an indepe
 - A separate follow-up branch includes a human-authored cancellation implementation, a legacy SQLite schema upgrade, concurrency checks, and handler-level HTTP request tests.
 - The order-detail follow-up task completed with 15 proposals (three per profile) against pinned revisions, then three same-model reviews. After a sandbox issue with TCP-bound tests, a documented protocol amendment switched only the test transport to local Unix socket pairs; the saved proposals were re-evaluated without replacement. All 15 passed the three task checks and 11 regression checks. The all-pass result has ceiling effects and does not separate profiles.
 - The order-detail implementation was then independently authored on the application follow-up branch and passed all 14 tests. No generated proposal was transferred automatically.
+- A second cumulative stage adds express delivery across the legacy order API and shipping service. Fifteen proposals were generated from one pinned revision, then evaluated using a documented test/spec amendment; all fifteen passed the corrected 5 acceptance and 14 regression checks. Three same-model reviews approved without findings. The initial error-body mismatch remains preserved in the app evidence. The independently authored implementation passed all 19 tests.
 
 ## Practical safeguards
 
