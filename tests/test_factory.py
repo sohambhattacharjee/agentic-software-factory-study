@@ -97,6 +97,30 @@ class FactoryTests(unittest.TestCase):
                 os.environ["OPENAI_API_KEY"] = old_key
         self.assertEqual(metadata["test_exit_code"], 0)
 
+    def test_review_call_usage_is_recorded_separately(self):
+        class UsageProvider:
+            model = "scripted-test-fixture"
+
+            def __init__(self):
+                self.calls = 0
+
+            def generate(self, prompt):
+                self.calls += 1
+                if self.calls == 1:
+                    text = json.dumps({"summary": "no change", "edits": [], "risks": []})
+                else:
+                    text = json.dumps({"summary": "reviewed", "findings": [], "verdict": "approve"})
+                return {"text": text, "model": self.model, "response_id": "fixture-%d" % self.calls,
+                        "usage": {"input_tokens": 100 * self.calls, "output_tokens": 10 * self.calls}}
+
+        run_dir, metadata = run_task(self.repo, "No change.", "review", UsageProvider(), self.output,
+                                     allow_test_execution=True)
+        self.assertEqual(metadata["response_id"], "fixture-1")
+        self.assertEqual(metadata["provider_usage"]["input_tokens"], 100)
+        self.assertEqual(metadata["review_response_id"], "fixture-2")
+        self.assertEqual(metadata["review_provider_usage"]["input_tokens"], 200)
+        self.assertTrue(os.path.isfile(os.path.join(run_dir, "review.txt")))
+
     def test_memory_profile_includes_author_memory(self):
         provider = ScriptedProvider({"summary": "no change", "edits": [], "risks": []})
         run_task(self.repo, "No change.", "memory", provider, self.output, memory_text="STUDY MEMORY NOTE")

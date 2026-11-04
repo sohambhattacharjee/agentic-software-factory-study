@@ -155,12 +155,13 @@ def run_task(repo_path, task_text, profile_name, provider, output_root, confirm_
         _write_json(os.path.join(run_dir, "verification.json"), test_result)
 
     review_result = None
+    review_response = None
     if profile["review_pass"]:
         review_prompt = (SYSTEM_INSTRUCTIONS + "\n\nReview the proposed patch and verification record. Return JSON with keys "+
                          "summary, findings (array), and verdict (approve|revise|unable_to_assess).\n\nPATCH\n"+
                          patch_text + "\n\nVERIFICATION\n" + json.dumps(test_result))
-        review = provider.generate(review_prompt)
-        review_result = review["text"]
+        review_response = provider.generate(review_prompt)
+        review_result = review_response["text"]
         with open(os.path.join(run_dir, "review.txt"), "w", encoding="utf-8") as review_file:
             review_file.write(review_result)
 
@@ -184,6 +185,9 @@ def run_task(repo_path, task_text, profile_name, provider, output_root, confirm_
         "model": response.get("model"),
         "response_id": response.get("response_id"),
         "provider_usage": response.get("usage"),
+        "review_model": None if review_response is None else review_response.get("model"),
+        "review_response_id": None if review_response is None else review_response.get("response_id"),
+        "review_provider_usage": None if review_response is None else review_response.get("usage"),
         "proposed_file_count": len(proposed["edits"]),
         "test_exit_code": None if test_result is None else test_result["exit_code"],
         "review_pass_performed": review_result is not None,
