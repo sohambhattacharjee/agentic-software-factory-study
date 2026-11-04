@@ -6,7 +6,7 @@ import sys
 from .context import inventory
 from .profiles import PROFILES
 from .provider import OpenAIResponsesProvider, ProviderError, ScriptedProvider
-from .runner import run_task
+from .runner import run_review, run_task
 from .safety import SafetyError, require_study_repo
 
 
@@ -28,12 +28,37 @@ def _parser():
                             help="acknowledge sending selected synthetic repository context and task to OpenAI API")
     run_parser.add_argument("--allow-test-execution", action="store_true",
                             help="allow the fixed unittest command to execute against the disposable copy")
+    run_parser.add_argument("--defer-test-execution", action="store_true",
+                            help="save a proposal without executing its code; verification can be performed separately")
+
+    review_parser = sub.add_parser("review", help="send a proposal diff and saved test record for review")
+    review_parser.add_argument("--run-dir", required=True)
+    review_parser.add_argument("--verification-file", required=True)
+    review_parser.add_argument("--provider", choices=("openai", "scripted"), default="scripted")
+    review_parser.add_argument("--response-file", help="JSON review fixture for offline scripted runs")
+    review_parser.add_argument("--confirm-external-model", action="store_true",
+                                help="acknowledge sending the synthetic diff and test record to OpenAI API")
     return parser
 
 
 def main(argv=None):
     args = _parser().parse_args(argv)
     try:
+        if args.command == "review":
+            if args.provider == "openai":
+                if not args.confirm_external_model:
+                    raise SafetyError("OpenAI-backed runs require --confirm-external-model.")
+                provider = OpenAIResponsesProvider()
+            else:
+                if not args.response_file:
+                    raise ValueError("Scripted reviews require --response-file.")
+                with open(args.response_file, encoding="utf-8") as response_file:
+                    provider = ScriptedProvider(json.load(response_file))
+            metadata = run_review(args.run_dir, args.verification_file, provider,
+                                  confirm_external=args.confirm_external_model)
+            print(json.dumps({"run_dir": os.path.realpath(args.run_dir), "metadata": metadata}, indent=2))
+            return 0
+
         if args.command == "inspect":
             root = require_study_repo(args.repo)
             result = {"root": root, "study_id": "synthetic-brownfield-agentic", "files": inventory(root)}
@@ -70,6 +95,7 @@ def main(argv=None):
             confirm_external=args.confirm_external_model,
             allow_test_execution=args.allow_test_execution,
             memory_text=memory,
+            defer_test_execution=args.defer_test_execution,
         )
         print(json.dumps({"run_dir": run_dir, "metadata": metadata}, indent=2))
         return 0

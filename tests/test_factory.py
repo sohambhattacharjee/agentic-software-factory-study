@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 from study_factory.provider import ScriptedProvider
-from study_factory.runner import run_task
+from study_factory.runner import run_review, run_task
 from study_factory.safety import SafetyError, require_study_repo, safe_relative_path
 from study_factory.context import inventory
 
@@ -79,6 +79,14 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(metadata["test_exit_code"], 0)
         self.assertTrue(os.path.isfile(os.path.join(run_dir, "verification.json")))
 
+    def test_verification_can_be_deferred_for_separate_sandboxed_evaluation(self):
+        provider = ScriptedProvider({"summary": "no change", "edits": [], "risks": []})
+        run_dir, metadata = run_task(self.repo, "No change.", "verification", provider, self.output,
+                                     defer_test_execution=True)
+        self.assertTrue(metadata["verification_deferred"])
+        self.assertIsNone(metadata["test_exit_code"])
+        self.assertFalse(os.path.exists(os.path.join(run_dir, "verification.json")))
+
     def test_verification_does_not_pass_api_key_to_test_process(self):
         test_path = os.path.join(self.repo, "tests", "test_no_secret.py")
         with open(test_path, "w", encoding="utf-8") as f:
@@ -113,12 +121,19 @@ class FactoryTests(unittest.TestCase):
                 return {"text": text, "model": self.model, "response_id": "fixture-%d" % self.calls,
                         "usage": {"input_tokens": 100 * self.calls, "output_tokens": 10 * self.calls}}
 
-        run_dir, metadata = run_task(self.repo, "No change.", "review", UsageProvider(), self.output,
-                                     allow_test_execution=True)
+        provider = UsageProvider()
+        run_dir, metadata = run_task(self.repo, "No change.", "review", provider, self.output,
+                                     defer_test_execution=True)
         self.assertEqual(metadata["response_id"], "fixture-1")
         self.assertEqual(metadata["provider_usage"]["input_tokens"], 100)
-        self.assertEqual(metadata["review_response_id"], "fixture-2")
-        self.assertEqual(metadata["review_provider_usage"]["input_tokens"], 200)
+        self.assertTrue(metadata["review_deferred"])
+        verification_path = os.path.join(self.temp.name, "verification.json")
+        with open(verification_path, "w", encoding="utf-8") as f:
+            json.dump({"exit_code": 0, "output": "8 tests passed"}, f)
+        reviewed = run_review(run_dir, verification_path, provider)
+        self.assertEqual(reviewed["review_response_id"], "fixture-2")
+        self.assertEqual(reviewed["review_provider_usage"]["input_tokens"], 200)
+        self.assertFalse(reviewed["review_deferred"])
         self.assertTrue(os.path.isfile(os.path.join(run_dir, "review.txt")))
 
     def test_memory_profile_includes_author_memory(self):

@@ -112,7 +112,7 @@ def _git_snapshot(root):
 
 
 def run_task(repo_path, task_text, profile_name, provider, output_root, confirm_external=False,
-             allow_test_execution=False, memory_text="", timeout=30):
+             allow_test_execution=False, memory_text="", timeout=30, defer_test_execution=False):
     if profile_name not in PROFILES:
         raise ValueError("Unknown profile: " + profile_name)
     root = require_study_repo(repo_path)
@@ -131,8 +131,10 @@ def run_task(repo_path, task_text, profile_name, provider, output_root, confirm_
     os.makedirs(run_dir, exist_ok=False)
     started = time.monotonic()
     profile = PROFILES[profile_name]
-    if profile["verification"] and not allow_test_execution:
+    if profile["verification"] and not allow_test_execution and not defer_test_execution:
         raise SafetyError("Running repository tests requires --allow-test-execution.")
+    if profile["verification"] and allow_test_execution and defer_test_execution:
+        raise SafetyError("Choose either --allow-test-execution or --defer-test-execution.")
     entries, selected, context = select_context(root, profile["repository_map"])
     if profile["persistent_memory"] and memory_text:
         context += "\n--- PERSISTENT STUDY MEMORY ---\n" + memory_text
@@ -150,13 +152,14 @@ def run_task(repo_path, task_text, profile_name, provider, output_root, confirm_
         proposal_file.write("\n")
 
     test_result = None
-    if profile["verification"]:
+    if profile["verification"] and allow_test_execution:
         test_result = _run_fixed_tests(scratch, timeout=timeout)
         _write_json(os.path.join(run_dir, "verification.json"), test_result)
 
     review_result = None
     review_response = None
-    if profile["review_pass"]:
+    review_deferred = bool(profile["review_pass"] and defer_test_execution)
+    if profile["review_pass"] and not defer_test_execution:
         review_prompt = (SYSTEM_INSTRUCTIONS + "\n\nReview the proposed patch and verification record. Return JSON with keys "+
                          "summary, findings (array), and verdict (approve|revise|unable_to_assess).\n\nPATCH\n"+
                          patch_text + "\n\nVERIFICATION\n" + json.dumps(test_result))
@@ -190,10 +193,43 @@ def run_task(repo_path, task_text, profile_name, provider, output_root, confirm_
         "review_provider_usage": None if review_response is None else review_response.get("usage"),
         "proposed_file_count": len(proposed["edits"]),
         "test_exit_code": None if test_result is None else test_result["exit_code"],
+        "verification_deferred": bool(profile["verification"] and defer_test_execution),
         "review_pass_performed": review_result is not None,
+        "review_deferred": review_deferred,
         "elapsed_seconds": round(time.monotonic() - started, 4),
         "human_intervention": {"required": True, "accepted": False, "notes": "Review patch and any model output before transferring changes."},
         "target_modified": False,
     }
     _write_json(os.path.join(run_dir, "metadata.json"), metadata)
     return run_dir, metadata
+
+
+def run_review(run_dir, verification_path, provider, confirm_external=False):
+    """Review a saved proposal and separately produced test record; executes no target code."""
+    if getattr(provider, "model", "") != "scripted-test-fixture" and not confirm_external:
+        raise SafetyError("External model use requires --confirm-external-model.")
+    run_dir = os.path.realpath(run_dir)
+    with open(os.path.join(run_dir, "metadata.json"), encoding="utf-8") as source:
+        metadata = json.load(source)
+    if metadata.get("profile") != "review" or not metadata.get("review_deferred"):
+        raise SafetyError("This run is not a review-profile run awaiting review.")
+    with open(os.path.join(run_dir, "patch.diff"), encoding="utf-8") as source:
+        patch_text = source.read()
+    with open(verification_path, encoding="utf-8") as source:
+        test_result = json.load(source)
+    review_prompt = (SYSTEM_INSTRUCTIONS + "\n\nReview the proposed patch and independent verification record. "
+                    "Return JSON with keys summary, findings (array), and verdict (approve|revise|unable_to_assess).\n\nPATCH\n"+
+                    patch_text + "\n\nVERIFICATION\n" + json.dumps(test_result))
+    started = time.monotonic()
+    response = provider.generate(review_prompt)
+    with open(os.path.join(run_dir, "review.txt"), "w", encoding="utf-8") as destination:
+        destination.write(response["text"])
+    metadata["review_pass_performed"] = True
+    metadata["review_deferred"] = False
+    metadata["review_model"] = response.get("model")
+    metadata["review_response_id"] = response.get("response_id")
+    metadata["review_provider_usage"] = response.get("usage")
+    metadata["review_elapsed_seconds"] = round(time.monotonic() - started, 4)
+    metadata["verification_record"] = os.path.basename(verification_path)
+    _write_json(os.path.join(run_dir, "metadata.json"), metadata)
+    return metadata

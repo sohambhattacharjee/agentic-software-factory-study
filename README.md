@@ -39,6 +39,7 @@ The first local runner smoke check is summarized in [`evidence/protocol-smoke-20
 - The factory accepts only the marked synthetic study repo.
 - It runs one fixed, non-model-selected test command; model output cannot execute shell commands.
 - The verification subprocess does not inherit `OPENAI_API_KEY` from the factory process.
+- For model-backed runs, use `--defer-test-execution` and evaluate the saved scratch copy separately. The `review` command sends a saved diff and verification record to the model without executing target code.
 - Generated edits are restricted to regular text files inside the scratch copy.
 - OpenAI-backed requests transmit the selected task and context to the OpenAI API only after explicit CLI acknowledgement.
 - This prototype is an experimental tool, not a production deployment or a legal determination of IP ownership.
