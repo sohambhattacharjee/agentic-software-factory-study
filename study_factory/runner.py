@@ -77,9 +77,11 @@ def _apply_edits(root, edits):
 
 def _run_fixed_tests(root, timeout=30):
     command = [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"]
+    test_env = os.environ.copy()
+    test_env.pop("OPENAI_API_KEY", None)
     try:
         result = subprocess.run(command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                universal_newlines=True, timeout=timeout, check=False)
+                                universal_newlines=True, timeout=timeout, check=False, env=test_env)
         return {"command": command, "exit_code": result.returncode, "output": result.stdout[-12000:], "timed_out": False}
     except subprocess.TimeoutExpired as exc:
         output = exc.stdout or ""

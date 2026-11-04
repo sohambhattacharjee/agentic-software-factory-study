@@ -79,6 +79,24 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(metadata["test_exit_code"], 0)
         self.assertTrue(os.path.isfile(os.path.join(run_dir, "verification.json")))
 
+    def test_verification_does_not_pass_api_key_to_test_process(self):
+        test_path = os.path.join(self.repo, "tests", "test_no_secret.py")
+        with open(test_path, "w", encoding="utf-8") as f:
+            f.write("import os, unittest\nclass SecretCheck(unittest.TestCase):\n"
+                    " def test_api_key_not_inherited(self): self.assertNotIn('OPENAI_API_KEY', os.environ)\n")
+        provider = ScriptedProvider({"summary": "no change", "edits": [], "risks": []})
+        old_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "fixture-only-secret"
+        try:
+            _, metadata = run_task(self.repo, "No change.", "verification", provider, self.output,
+                                   allow_test_execution=True)
+        finally:
+            if old_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = old_key
+        self.assertEqual(metadata["test_exit_code"], 0)
+
     def test_memory_profile_includes_author_memory(self):
         provider = ScriptedProvider({"summary": "no change", "edits": [], "risks": []})
         run_task(self.repo, "No change.", "memory", provider, self.output, memory_text="STUDY MEMORY NOTE")
