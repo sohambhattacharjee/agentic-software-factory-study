@@ -32,7 +32,25 @@ class OpenAIResponsesProvider:
             with urlopen(request, timeout=self.timeout) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
-            raise ProviderError("OpenAI API returned HTTP " + str(exc.code) + ".") from None
+            details = []
+            request_id = exc.headers.get("x-request-id") if exc.headers else None
+            try:
+                error_payload = json.loads(exc.read().decode("utf-8")).get("error", {})
+                for key in ("code", "type"):
+                    value = error_payload.get(key)
+                    if isinstance(value, str) and value not in details:
+                        details.append(value)
+                message = error_payload.get("message")
+                if isinstance(message, str):
+                    details.append(message.replace(self.api_key, "[redacted]"))
+            except (UnicodeError, json.JSONDecodeError, AttributeError, TypeError):
+                pass
+            summary = "OpenAI API returned HTTP " + str(exc.code)
+            if details:
+                summary += ": " + "; ".join(details)
+            if request_id:
+                summary += " (request ID " + request_id + ")"
+            raise ProviderError(summary + ".") from None
         except (URLError, TimeoutError) as exc:
             raise ProviderError("OpenAI API request failed: " + type(exc).__name__) from None
         except (UnicodeError, json.JSONDecodeError) as exc:

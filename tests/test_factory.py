@@ -3,8 +3,11 @@ import os
 import subprocess
 import tempfile
 import unittest
+from io import BytesIO
+from urllib.error import HTTPError
+from unittest.mock import patch
 
-from study_factory.provider import ScriptedProvider
+from study_factory.provider import OpenAIResponsesProvider, ProviderError, ScriptedProvider
 from study_factory.runner import run_review, run_task
 from study_factory.safety import SafetyError, require_study_repo, safe_relative_path
 from study_factory.context import inventory
@@ -45,6 +48,20 @@ class FactoryTests(unittest.TestCase):
     def test_relative_path_rejects_traversal(self):
         with self.assertRaises(SafetyError):
             safe_relative_path("../outside.txt")
+
+    def test_provider_reports_auth_error_details_without_leaking_key(self):
+        body = json.dumps({"error": {"type": "invalid_request_error", "code": "missing_scopes",
+                                      "message": "Missing scopes for fixture-secret"}}).encode("utf-8")
+        error = HTTPError("https://api.openai.com/v1/responses", 401, "Unauthorized",
+                          {"x-request-id": "req_fixture"}, BytesIO(body))
+        provider = OpenAIResponsesProvider(model="gpt-6.1-sol", api_key="fixture-secret")
+        with patch("study_factory.provider.urlopen", side_effect=error):
+            with self.assertRaises(ProviderError) as caught:
+                provider.generate("synthetic prompt")
+        message = str(caught.exception)
+        self.assertIn("missing_scopes", message)
+        self.assertIn("req_fixture", message)
+        self.assertNotIn("fixture-secret", message)
 
     def test_inventory_excludes_database_files(self):
         with open(os.path.join(self.repo, "study.sqlite3"), "wb") as f:
